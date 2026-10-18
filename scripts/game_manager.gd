@@ -13,15 +13,22 @@ var game_started: bool = false
 func _ready() -> void:
 	print(GAME_TITLE)
 
-	if not InputMap.has_action("interact"):
-		InputMap.add_action("interact")
-
+	setup_input_actions()
 	setup_environment()
 	create_workshop()
 	create_player()
 	create_mobile_controls()
 
 	game_started = true
+
+
+func setup_input_actions() -> void:
+	# إنشاء إجراء التفاعل (مرة واحدة فقط) وربطه بمفتاح E للكمبيوتر
+	if not InputMap.has_action("interact"):
+		InputMap.add_action("interact")
+		var key_event := InputEventKey.new()
+		key_event.physical_keycode = KEY_E
+		InputMap.action_add_event("interact", key_event)
 
 
 func setup_environment() -> void:
@@ -76,9 +83,11 @@ func create_mobile_controls() -> void:
 
 	var controls = Control.new()
 	controls.name = "MobileControls"
-	controls.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	controls.set_script(CONTROLS_SCRIPT)
 	canvas.add_child(controls)
+
+	# يجب استدعاؤها بعد add_child حتى يأخذ الحجم من الـ parent
+	controls.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 
 func start_game() -> void:

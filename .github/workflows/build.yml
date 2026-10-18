@@ -50,8 +50,26 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Prepare Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKM" ]; then
+            SDKM="$(find $ANDROID_HOME/cmdline-tools -name sdkmanager -type f | head -n 1)"
+          fi
+          echo "Using sdkmanager: $SDKM"
+
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" \
+            "platform-tools" \
+            "build-tools;34.0.0" \
+            "platforms;android-34" \
+            "cmake;3.10.2.4988749" \
+            "ndk;23.2.8568313"
 
       - name: Configure Godot Android paths
         shell: bash

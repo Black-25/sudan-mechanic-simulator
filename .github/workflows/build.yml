@@ -10,7 +10,16 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Setup Android SDK manually
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Setup Android SDK
         shell: bash
         run: |
           set -euo pipefail
@@ -22,12 +31,55 @@ jobs:
           unzip -q cmdline-tools.zip -d android-sdk/cmdline-tools
           mv android-sdk/cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
           
-          # إضافة للـ PATH
-          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          # تعريف المتغيرات
+          export ANDROID_HOME="$HOME/android-sdk"
+          export ANDROID_SDK_ROOT="$HOME/android-sdk"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          
+          # حفظ المتغيرات للخطوات القادمة
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+          
+          # استخدام المسار الكامل مباشرة (الحل الأكيد)
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           
           # تثبيت الحزم
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          
+          echo "✅ Android SDK installed successfully"
+          ls -la "$ANDROID_HOME"
+      
+      - name: Setup Godot
+        run: |
+          wget -q "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3.0-stable_linux.x86_64.zip" -O godot.zip
+          unzip -q godot.zip
+          mv "Godot_v4.3.0-stable_linux.x86_64" godot
+          chmod +x godot
+          sudo mv godot /usr/local/bin/
+          godot --version
+      
+      - name: Install Export Templates
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates/4.3.stable
+          cd ~/.local/share/godot/export_templates/4.3.stable
+          wget -q "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3.0-stable_export_templates.tpz" -O templates.tpz
+          unzip -oq templates.tpz
+          mv templates/* .
+          rm -rf templates templates.tpz
+          ls -la
+      
+      - name: Build APK
+        run: |
+          mkdir -p build
+          export ANDROID_HOME="$HOME/android-sdk"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          godot --headless --export-release "Android" "build/android.apk"
+      
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/*.apk

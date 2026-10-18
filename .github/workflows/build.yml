@@ -33,8 +33,8 @@ jobs:
 
       - name: Install Android SDK packages
         run: |
-          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
           yes | sdkmanager --licenses
+          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Download Godot
         run: |
@@ -47,10 +47,12 @@ jobs:
       - name: Download Godot export templates
         run: |
           wget -nv "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -O templates.tpz
+          mkdir -p templates-unpacked
           unzip -q templates.tpz -d templates-unpacked
           TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/${GODOT_RELEASE}"
           mkdir -p "$TEMPLATES_DIR"
-          cp -a templates-unpacked/templates/. "$TEMPLATES_DIR/"
+          find templates-unpacked -type f \( -name "android_debug.apk" -o -name "android_release.apk" \) -exec cp -v {} "$TEMPLATES_DIR/" \;
+          ls -la "$TEMPLATES_DIR"
           test -s "$TEMPLATES_DIR/android_debug.apk"
           test -s "$TEMPLATES_DIR/android_release.apk"
 

@@ -33,33 +33,51 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/4.3.stable"
-          mkdir -p "$TEMPLATE_DIR"
-          mkdir -p /tmp/godot-templates/unpacked
-
+          mkdir -p "$TEMPLATE_DIR" /tmp/godot-templates/unpacked
           wget --tries=3 --timeout=120 \
             "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz" \
             -O /tmp/godot-templates/templates.tpz
+          unzip -oq /tmp/godot-templates/templates.tpz -d /tmp/godot-templates/unpacked
+          cp -r /tmp/godot-templates/unpacked/templates/. "$TEMPLATE_DIR"/
+          test -s "$TEMPLATE_DIR/android_debug.apk"
+          test -s "$TEMPLATE_DIR/android_release.apk"
+          test -s "$TEMPLATE_DIR/version.txt"
 
-          unzip -oq /tmp/godot-templates/templates.tpz \
-            -d /tmp/godot-templates/unpacked
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
-          SRC_DIR="/tmp/godot-templates/unpacked/templates"
-          if [ ! -d "$SRC_DIR" ]; then
-            echo "ERROR: templates folder not found."
-            find /tmp/godot-templates/unpacked -maxdepth 2 -print
-            exit 1
-          fi
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-          cp -r "$SRC_DIR"/. "$TEMPLATE_DIR"/
+      - name: Configure Godot Android paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.config/godot
+          printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/java_sdk_path = "%s"\nexport/android/android_sdk_path = "%s"\n' "$JAVA_HOME" "$ANDROID_HOME" > ~/.config/godot/editor_settings-4.3.tres
 
-          for f in android_debug.apk android_release.apk version.txt; do
-            if [ ! -s "$TEMPLATE_DIR/$f" ]; then
-              echo "ERROR: missing $f"
-              ls -lh "$TEMPLATE_DIR"
-              exit 1
-            fi
-          done
+          keytool -genkey -v -keystore ~/debug.keystore \
+            -storepass android -alias androiddebugkey -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
 
-          echo "Templates installed."
+      - name: Export APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/debug.keystore
+          export GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android
+          godot --headless --import || true
+          godot --headless --export-debug "Android" build/game.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-apk
+          path: build/game.apk

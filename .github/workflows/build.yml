@@ -1,55 +1,131 @@
-name: Build Android APK
+name: Build SUDAN MECHANIC SIMULATOR
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    
+    name: Build Android APK
+    runs-on: ubuntu-22.04
+
+    env:
+      GODOT_VERSION: "4.3"
+      GODOT_RELEASE: "4.3-stable"
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup Godot
-      uses: chickensoft-games/setup-godot@v2
-      with:
-        version: 4.3.0
-        use-dotnet: false
-        
-    - name: Install Android SDK
-      uses: android-actions/setup-android@v3
-      
-    - name: Setup Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-        
-    - name: Setup Export Templates
-      run: |
-        EXPORT_DIR="$HOME/.local/share/godot/export_templates/4.3.stable"
-        mkdir -p "$EXPORT_DIR"
-        cd "$EXPORT_DIR"
-        wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
-        unzip -q Godot_v4.3-stable_export_templates.tpz
-        mv templates/* .
-        rm -rf templates *.tpz
-        chmod +x android_*.apk 2>/dev/null || true
-        
-    - name: Verify Templates
-      run: |
-        ls -la ~/.local/share/godot/export_templates/4.3.stable/
-        test -f ~/.local/share/godot/export_templates/4.3.stable/android_debug.apk
-        test -f ~/.local/share/godot/export_templates/4.3.stable/android_release.apk
-        
-    - name: Build Android APK
-      run: |
-        godot --headless --export-release "Android" build/android.apk 2>&1 | tee build.log
-        
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: android-apk
-        path: build/android.apk
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          yes | sdkmanager --licenses
+
+      - name: Download Godot
+        run: |
+          set -eu
+          wget -nv "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -O godot.zip
+          unzip -q godot.zip -d godot-bin
+          chmod +x "godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          sudo install -m 755 "godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Download and install Godot export templates
+        run: |
+          set -eu
+          wget -nv "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -O templates.tpz
+          mkdir -p templates-unpacked
+          unzip -q templates.tpz -d templates-unpacked
+
+          echo "Extracted template files:"
+          find templates-unpacked -maxdepth 4 -type f
+
+          TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/${GODOT_RELEASE}"
+          mkdir -p "$TEMPLATES_DIR"
+
+          DEBUG_TEMPLATE="$(find templates-unpacked -type f -name android_debug.apk -print -quit)"
+          RELEASE_TEMPLATE="$(find templates-unpacked -type f -name android_release.apk -print -quit)"
+
+          if [ -z "$DEBUG_TEMPLATE" ] || [ -z "$RELEASE_TEMPLATE" ]; then
+            echo "ERROR: Android templates were not found in the downloaded archive."
+            exit 1
+          fi
+
+          cp "$DEBUG_TEMPLATE" "$TEMPLATES_DIR/android_debug.apk"
+          cp "$RELEASE_TEMPLATE" "$TEMPLATES_DIR/android_release.apk"
+
+          echo "Installed template files:"
+          ls -lh "$TEMPLATES_DIR"
+
+          test -s "$TEMPLATES_DIR/android_debug.apk"
+          test -s "$TEMPLATES_DIR/android_release.apk"
+
+      - name: Check project files
+        run: |
+          set -eu
+          test -f project.godot
+          test -f export_presets.cfg
+          test -f scenes/main.tscn
+          test -f scenes/player.tscn
+          test -f scenes/workshop.tscn
+          test -f scripts/game_manager.gd
+          test -f scripts/player.gd
+          test -f scripts/camera_controller.gd
+          test -f scripts/mobile_controls.gd
+          test -f scripts/save_system.gd
+
+      - name: Create debug keystore
+        run: |
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000
+
+      - name: Import project resources
+        run: |
+          godot --headless --editor --path . --import
+
+      - name: Export Android APK
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /home/runner/.android/debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+        run: |
+          set -eu
+          mkdir -p build
+          godot --headless --path . --export-debug "Android" build/SudanMechanicSimulator.apk
+
+      - name: Verify APK
+        run: |
+          set -eu
+          test -s build/SudanMechanicSimulator.apk
+          ls -lh build/SudanMechanicSimulator.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sudan-Mechanic-Simulator-APK
+          path: build/SudanMechanicSimulator.apk
+          if-no-files-found: error
+          retention-days: 14

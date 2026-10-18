@@ -1,20 +1,20 @@
 extends Node3D
 
-const GAME_TITLE := "SUDAN MECHANIC SIMULATOR"
-
+const GAME_TITLE = "SUDAN MECHANIC SIMULATOR"
 const WORKSHOP_SCENE = preload("res://scenes/workshop.tscn")
 const PLAYER_SCENE = preload("res://scenes/player.tscn")
 const CONTROLS_SCRIPT = preload("res://scripts/mobile_controls.gd")
 const CAMERA_SCRIPT = preload("res://scripts/camera_controller.gd")
 
 var player: CharacterBody3D
-var game_started := false
+var game_started: bool = false
 
 
 func _ready() -> void:
 	print(GAME_TITLE)
 
-	InputMap.add_action("interact")
+	if not InputMap.has_action("interact"):
+		InputMap.add_action("interact")
 
 	setup_environment()
 	create_workshop()
@@ -25,8 +25,8 @@ func _ready() -> void:
 
 
 func setup_environment() -> void:
-	var world_environment := WorldEnvironment.new()
-	var environment := Environment.new()
+	var world_environment = WorldEnvironment.new()
+	var environment = Environment.new()
 
 	environment.background_mode = Environment.BG_COLOR
 	environment.background_color = Color(0.45, 0.58, 0.72)
@@ -37,7 +37,7 @@ func setup_environment() -> void:
 	world_environment.environment = environment
 	add_child(world_environment)
 
-	var sun := DirectionalLight3D.new()
+	var sun = DirectionalLight3D.new()
 	sun.name = "Sun"
 	sun.rotation_degrees = Vector3(-45, -30, 0)
 	sun.light_energy = 1.2
@@ -45,7 +45,7 @@ func setup_environment() -> void:
 
 
 func create_workshop() -> void:
-	var workshop := WORKSHOP_SCENE.instantiate()
+	var workshop = WORKSHOP_SCENE.instantiate()
 	workshop.name = "Workshop"
 	add_child(workshop)
 
@@ -56,33 +56,29 @@ func create_player() -> void:
 	player.position = Vector3(0, 0, 3)
 	add_child(player)
 
-	var camera_arm := SpringArm3D.new()
+	var camera_arm = SpringArm3D.new()
 	camera_arm.name = "CameraArm"
 	camera_arm.position = Vector3(0, 1.5, 0)
 	camera_arm.spring_length = 5.0
 	camera_arm.set_script(CAMERA_SCRIPT)
 	player.add_child(camera_arm)
 
-	var camera := Camera3D.new()
+	var camera = Camera3D.new()
 	camera.name = "Camera3D"
-	camera.position = Vector3(0, 0, 0)
 	camera.current = true
 	camera_arm.add_child(camera)
 
 
 func create_mobile_controls() -> void:
-	var canvas := CanvasLayer.new()
+	var canvas = CanvasLayer.new()
 	canvas.name = "MobileControlsLayer"
 	add_child(canvas)
 
-	var controls := Control.new()
+	var controls = Control.new()
 	controls.name = "MobileControls"
+	controls.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	controls.set_script(CONTROLS_SCRIPT)
 	canvas.add_child(controls)
-
-	controls.set_anchors_and_offsets_preset(
-		Control.PRESET_FULL_RECT
-	)
 
 
 func start_game() -> void:

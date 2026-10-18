@@ -32,7 +32,7 @@ jobs:
             -O /tmp/tpl/t.tpz
           unzip -oq /tmp/tpl/t.tpz -d /tmp/tpl/out
           cp -r /tmp/tpl/out/templates/. "$T"/
-          ls "$T" | head -30
+          ls "$T"
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -50,7 +50,7 @@ jobs:
           set +o pipefail
           yes | "$SDKM" --licenses > /dev/null 2>&1 || true
           set -o pipefail
-          "$SDKM" "platform-tools" "build-tools;34.0.0" "platforms;android-34" "cmake;3.22.1" "ndk;23.2.8568313"
+          "$SDKM" "platform-tools" "build-tools;34.0.0" "platforms;android-34"
 
       - name: Configure Godot
         shell: bash
@@ -62,29 +62,17 @@ jobs:
             -storepass android -alias androiddebugkey -keypass android \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME"
           S=$(printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/java_sdk_path = "%s"\nexport/android/android_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' "$JAVA_HOME" "$ANDROID_HOME" "$HOME")
           echo "$S" > ~/.config/godot/editor_settings-4.3.tres
-          echo "$S" > ~/.config/godot/editor_settings-4.tres
+          cat ~/.config/godot/editor_settings-4.3.tres
 
-      - name: Prepare project (no icon, generate preset)
+      - name: Write export preset
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== project.godot location ==="
-          find . -name project.godot -not -path "./android/*"
-          test -f project.godot || { echo "project.godot NOT in repo root"; exit 1; }
-
-          # remove icon from project
           sed -i '/^config\/icon=/d' project.godot
-
-          # build template for gradle
-          mkdir -p android/build
-          unzip -oq "$HOME/.local/share/godot/export_templates/4.3.stable/android_source.zip" -d android/build
-          echo "4.3.stable" > android/.build_version
-          touch android/build/.gdignore
-          chmod +x android/build/gradlew
-
-          # generate clean preset
           cat > export_presets.cfg <<'EOF'
           [preset.0]
 
@@ -106,10 +94,10 @@ jobs:
 
           custom_template/debug=""
           custom_template/release=""
-          gradle_build/use_gradle_build=true
+          gradle_build/use_gradle_build=false
           gradle_build/export_format=0
-          gradle_build/min_sdk="24"
-          gradle_build/target_sdk="34"
+          gradle_build/min_sdk=""
+          gradle_build/target_sdk=""
           architectures/armeabi-v7a=false
           architectures/arm64-v8a=true
           architectures/x86=false
@@ -139,10 +127,8 @@ jobs:
           mkdir -p build
           godot --headless --path . --import
           godot --headless --verbose --path . --export-debug "Android" build/SudanMechanicSimulator.apk 2>&1 | tee export.log || {
-            echo "=== project.godot ==="
-            head -40 project.godot
             echo "=== last log ==="
-            tail -50 export.log
+            tail -60 export.log
             exit 1
           }
           ls -lh build/SudanMechanicSimulator.apk

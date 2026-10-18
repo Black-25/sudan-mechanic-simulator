@@ -13,20 +13,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
       
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools: 34.0.0
+      
       - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          
+          # sdkmanager الآن متاح في PATH بفضل الخطوة السابقة
           yes | sdkmanager --update || true
           yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0" "cmdline-tools;latest"
-          sdkmanager --list_installed | grep -E "(platform-tools|android-35|35.0.0)"
+          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
       
       - name: Setup Godot
         run: |

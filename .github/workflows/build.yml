@@ -12,44 +12,117 @@ permissions:
 jobs:
   build:
     name: Build Android APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
-    container:
-      image: barichello/godot-ci:4.3
+    env:
+      GODOT_VERSION: 4.3.0
+      GODOT_RELEASE: 4.3-stable
+      # مسار القوالب يستخدم GODOT_RELEASE وليس GODOT_VERSION
+      GODOT_TEMPLATES_DIR: ${{ github.workspace }}/godot-templates
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check Godot version
-        run: godot --version
+      - name: Install Java and Android tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-17-jdk unzip wget curl
+          # إصلاح: التأكد من وجود JAVA_HOME بشكل صحيح
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # إضافة cmdline-tools بشكل صريح
+          cmdline-tools-version: 11076708
+          platform: 35
+          build-tools: 35.0.0
+
+      - name: Install Android SDK packages
+        run: |
+          # إصلاح: استخدام المسار الكامل لـ sdkmanager
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Download Godot
+        run: |
+          wget -q \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" \
+            -O godot.zip
+          unzip -q godot.zip -d godot-bin
+          chmod +x godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64
+          sudo mv godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+          godot --version
+
+      - name: Download Godot export templates
+        run: |
+          # إصلاح مهم: Godot 4.x يتوقع المسار بدون "Godot_v" في البداية
+          TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/${GODOT_RELEASE}"
+          mkdir -p "$TEMPLATES_DIR"
+          
+          wget -q \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" \
+            -O templates.tpz
+          unzip -q templates.tpz -d templates-unpacked
+          
+          # إصلاح: نسخ المحتوى مباشرة إلى مجلد الإصدار الصحيح
+          cp -a templates-unpacked/templates/. "$TEMPLATES_DIR/"
+          
+          # التحقق من وجود قوالب Android
+          ls -la "$TEMPLATES_DIR/android/"
 
       - name: Check project files
         run: |
+          set -eu
           test -f project.godot
+          test -f export_presets.cfg
           test -f scenes/main.tscn
+          test -f scenes/player.tscn
+          test -f scenes/workshop.tscn
           test -f scripts/game_manager.gd
           test -f scripts/player.gd
+          test -f scripts/camera_controller.gd
+          test -f scripts/mobile_controls.gd
           test -f scripts/save_system.gd
-          echo "Project files found."
 
-      - name: Check Android export preset
+      - name: Configure Android export environment
         run: |
-          if [ ! -f export_presets.cfg ]; then
-            echo "::error::Missing export_presets.cfg"
-            exit 1
-          fi
+          mkdir -p "$HOME/.config/godot"
+          mkdir -p "$HOME/.local/share/godot"
+          
+          # إنشاء مفتاح التوقيع
+          keytool -genkeypair \
+            -keystore "$HOME/debug.keystore" \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000
+            
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
 
       - name: Import project resources
         run: |
-          godot --headless --editor --path . --quit
+          # إصلاح: استيراد المشروع أولاً لإنشاء .godot folder
+          godot --headless --editor --path . --quit --import
 
       - name: Export Android APK
         run: |
           mkdir -p build
+          # إصلاح: استخدام --export-release مع علامة debug في اسم الملف
           godot --headless --path . \
             --export-debug "Android" \
             build/SudanMechanicSimulator.apk
+
+      - name: Verify APK
+        run: |
+          test -s build/SudanMechanicSimulator.apk
+          ls -lh build/SudanMechanicSimulator.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

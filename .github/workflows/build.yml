@@ -67,6 +67,8 @@ jobs:
           set -o pipefail
 
           "$SDKM" "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+          "$SDKM" "cmake;3.10.2.4988749" || echo "cmake skipped"
+          "$SDKM" "ndk;23.2.8568313" || echo "ndk skipped"
 
       - name: Configure Godot Android paths
         shell: bash
@@ -79,16 +81,33 @@ jobs:
             -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
 
-          printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/java_sdk_path = "%s"\nexport/android/android_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\nexport/android/force_system_user = false\nexport/android/shutdown_adb_on_exit = true\n' "$JAVA_HOME" "$ANDROID_HOME" "$HOME" > ~/.config/godot/editor_settings-4.tres
-          cat ~/.config/godot/editor_settings-4.tres
+          SETTINGS=$(printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/java_sdk_path = "%s"\nexport/android/android_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\nexport/android/force_system_user = false\nexport/android/shutdown_adb_on_exit = true\n' "$JAVA_HOME" "$ANDROID_HOME" "$HOME")
+          echo "$SETTINGS" > ~/.config/godot/editor_settings-4.3.tres
+          echo "$SETTINGS" > ~/.config/godot/editor_settings-4.tres
+          cat ~/.config/godot/editor_settings-4.3.tres
+
+      - name: Debug info
+        shell: bash
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME" || true
+          ls "$ANDROID_HOME/build-tools" || true
+          ls "$ANDROID_HOME/platforms" || true
+          ls "$ANDROID_HOME/cmake" || true
+          ls "$ANDROID_HOME/ndk" || true
+          ls "$ANDROID_HOME/cmdline-tools" || true
+          ls ~/.local/share/godot/export_templates/4.3.stable
+          ls -la
+          cat export_presets.cfg
 
       - name: Export APK
         shell: bash
         run: |
           set -eo pipefail
           mkdir -p build
-          godot --headless --import || true
-          godot --headless --verbose --export-debug "Android" build/SudanMechanicSimulator.apk 2>&1 | tee export.log
+          godot --headless --path . --import || true
+          godot --headless --verbose --path . --export-debug "Android" build/SudanMechanicSimulator.apk 2>&1 | tee export.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

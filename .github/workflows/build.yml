@@ -14,25 +14,39 @@ jobs:
     name: Build Android APK
     runs-on: ubuntu-latest
 
+    container:
+      image: barichello/godot-ci:4.3.0
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build Godot Android APK
-        uses: docker://barichello/godot-ci:4.3.0
+      - name: Check Godot version
+        run: godot --version
 
       - name: Check project files
         run: |
-          echo "Checking Godot project..."
           test -f project.godot
           test -f scenes/main.tscn
+          test -f scripts/game_manager.gd
+          test -f scripts/player.gd
+          test -f scripts/save_system.gd
           echo "Project files found."
 
-      - name: Prepare build directory
-        run: mkdir -p build
+      - name: Check Android export preset
+        run: |
+          if [ ! -f export_presets.cfg ]; then
+            echo "::error::Missing export_presets.cfg"
+            exit 1
+          fi
+
+      - name: Import project resources
+        run: |
+          godot --headless --editor --path . --quit
 
       - name: Export Android APK
         run: |
+          mkdir -p build
           godot --headless --path . \
             --export-debug "Android" \
             build/SudanMechanicSimulator.apk

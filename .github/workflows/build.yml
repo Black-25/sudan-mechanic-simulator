@@ -1,0 +1,46 @@
+name: Build SUDAN MECHANIC SIMULATOR
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Godot Android APK
+        uses: docker://barichello/godot-ci:4.3.0
+
+      - name: Check project files
+        run: |
+          echo "Checking Godot project..."
+          test -f project.godot
+          test -f scenes/main.tscn
+          echo "Project files found."
+
+      - name: Prepare build directory
+        run: mkdir -p build
+
+      - name: Export Android APK
+        run: |
+          godot --headless --path . \
+            --export-debug "Android" \
+            build/SudanMechanicSimulator.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sudan-Mechanic-Simulator-APK
+          path: build/SudanMechanicSimulator.apk
+          if-no-files-found: error
+          retention-days: 14

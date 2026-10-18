@@ -1,69 +1,52 @@
 name: Build SUDAN MECHANIC SIMULATOR
-
 on:
   workflow_dispatch:
   push:
     branches:
       - main
-
 permissions:
   contents: read
-
 jobs:
   build:
     name: Build Android APK
     runs-on: ubuntu-22.04
-
     env:
       GODOT_VERSION: 4.3.0
       GODOT_RELEASE: 4.3-stable
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install Java
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y openjdk-17-jdk unzip wget
-          # إصلاح: تحديد JAVA_HOME بشكل صريح
-          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> "$GITHUB_ENV"
-          echo "$JAVA_HOME/bin" >> "$GITHUB_PATH"
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          # إصلاح: إضافة cmdline-tools-version إلزامي
-          cmdline-tools-version: 11076708
-          packages: |
-            platform-tools
-            platforms;android-35
-            build-tools;35.0.0
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Download Godot
         run: |
-          wget -q \
-            "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" \
-            -O godot.zip
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -O godot.zip
           unzip -q godot.zip -d godot-bin
           chmod +x godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64
           sudo mv godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
           godot --version
 
-      - name: Install Godot export templates
+      - name: Download Godot export templates
         run: |
-          # إصلاح: إنشاء المجلد بالمسار الصحيح
+          wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -O templates.tpz
+          unzip -q templates.tpz -d templates-unpacked
           TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/${GODOT_RELEASE}"
           mkdir -p "$TEMPLATES_DIR"
-          
-          wget -q \
-            "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" \
-            -O templates.tpz
-          unzip -q templates.tpz -d templates-unpacked
           cp -a templates-unpacked/templates/. "$TEMPLATES_DIR/"
-          
-          # التحقق من نجاح التثبيت
-          ls -la "$TEMPLATES_DIR/android/" || echo "Warning: Android templates not found"
+          test -s "$TEMPLATES_DIR/android_debug.apk"
+          test -s "$TEMPLATES_DIR/android_release.apk"
 
       - name: Check project files
         run: |
@@ -81,33 +64,23 @@ jobs:
 
       - name: Create debug keystore
         run: |
-          # إصلاح: إنشاء المجلد أولاً واستخدام المسار القياسي
           mkdir -p "$HOME/.android"
-          keytool -genkeypair \
-            -keystore "$HOME/.android/debug.keystore" \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -dname "CN=Android Debug,O=Android,C=US" \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000
-          
-          # إضافة متغيرات البيئة للـ Android SDK
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          keytool -genkeypair -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
 
       - name: Import project resources
         run: |
-          # إصلاح: إضافة --import لاستيراد الموارد بشكل صحيح
-          godot --headless --editor --path . --quit --import
+          godot --headless --editor --path . --import
 
       - name: Export Android APK
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ runner.home }}/.android/debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
           mkdir -p build
-          godot --headless --path . \
-            --export-debug "Android" \
-            build/SudanMechanicSimulator.apk
+          godot --headless --path . --export-debug "Android" build/SudanMechanicSimulator.apk
 
       - name: Verify APK
         run: |

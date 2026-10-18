@@ -62,8 +62,6 @@ jobs:
             -storepass android -alias androiddebugkey -keypass android \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
-          echo "JAVA_HOME=$JAVA_HOME"
-          echo "ANDROID_HOME=$ANDROID_HOME"
           S=$(printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/java_sdk_path = "%s"\nexport/android/android_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' "$JAVA_HOME" "$ANDROID_HOME" "$HOME")
           echo "$S" > ~/.config/godot/editor_settings-4.3.tres
           cat ~/.config/godot/editor_settings-4.3.tres
@@ -119,6 +117,14 @@ jobs:
           keystore/release_password=""
           EOF
           sed -i 's/^          //' export_presets.cfg
+
+      - name: Enable ETC2/ASTC for Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i '/^textures\/vram_compression\/import_etc2_astc=/d' project.godot
+          sed -i '/^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' project.godot
+          grep -n -A6 '^\[rendering\]' project.godot
 
       - name: Export APK
         shell: bash

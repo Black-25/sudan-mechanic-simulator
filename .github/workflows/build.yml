@@ -26,29 +26,17 @@ jobs:
           accept-android-sdk-licenses: true
           packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
       
-      - name: Verify SDK
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          which sdkmanager
-          sdkmanager --list_installed | head -20
-      
-      - name: Setup Godot
-        run: |
-          wget -q "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3.0-stable_linux.x86_64.zip" -O godot.zip
-          unzip -q godot.zip
-          mv "Godot_v4.3.0-stable_linux.x86_64" godot
-          chmod +x godot
-          sudo mv godot /usr/local/bin/
-          godot --version
+      - name: Setup Godot Engine
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.3.0
+          use-dotnet: false
       
       - name: Install Export Templates
         run: |
           mkdir -p ~/.local/share/godot/export_templates/4.3.stable
           cd ~/.local/share/godot/export_templates/4.3.stable
-          wget -q "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3.0-stable_export_templates.tpz" -O templates.tpz
+          wget --tries=3 --timeout=60 -q "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3.0-stable_export_templates.tpz" -O templates.tpz
           unzip -oq templates.tpz
           mv templates/* .
           rm -rf templates templates.tpz

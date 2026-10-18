@@ -2,8 +2,10 @@ extends Node3D
 
 const GAME_TITLE := "SUDAN MECHANIC SIMULATOR"
 
-const WORKSHOP_SCENE := preload("res://scenes/workshop.tscn")
-const PLAYER_SCENE := preload("res://scenes/player.tscn")
+const WORKSHOP_SCENE = preload("res://scenes/workshop.tscn")
+const PLAYER_SCENE = preload("res://scenes/player.tscn")
+const CONTROLS_SCRIPT = preload("res://scripts/mobile_controls.gd")
+const CAMERA_SCRIPT = preload("res://scripts/camera_controller.gd")
 
 var player: CharacterBody3D
 var game_started := false
@@ -11,11 +13,13 @@ var game_started := false
 
 func _ready() -> void:
 	print(GAME_TITLE)
-	print("Welcome, Adam!")
+
+	InputMap.add_action("interact")
 
 	setup_environment()
 	create_workshop()
 	create_player()
+	create_mobile_controls()
 
 	game_started = true
 
@@ -49,25 +53,36 @@ func create_workshop() -> void:
 func create_player() -> void:
 	player = PLAYER_SCENE.instantiate() as CharacterBody3D
 	player.name = "Adam"
-
-	player.set_script(load("res://scripts/player.gd"))
-	add_child(player)
-
 	player.position = Vector3(0, 0, 3)
+	add_child(player)
 
 	var camera_arm := SpringArm3D.new()
 	camera_arm.name = "CameraArm"
 	camera_arm.position = Vector3(0, 1.5, 0)
 	camera_arm.spring_length = 5.0
-	camera_arm.set_script(
-		load("res://scripts/camera_controller.gd")
-	)
+	camera_arm.set_script(CAMERA_SCRIPT)
 	player.add_child(camera_arm)
 
 	var camera := Camera3D.new()
 	camera.name = "Camera3D"
+	camera.position = Vector3(0, 0, 0)
 	camera.current = true
 	camera_arm.add_child(camera)
+
+
+func create_mobile_controls() -> void:
+	var canvas := CanvasLayer.new()
+	canvas.name = "MobileControlsLayer"
+	add_child(canvas)
+
+	var controls := Control.new()
+	controls.name = "MobileControls"
+	controls.set_script(CONTROLS_SCRIPT)
+	canvas.add_child(controls)
+
+	controls.set_anchors_and_offsets_preset(
+		Control.PRESET_FULL_RECT
+	)
 
 
 func start_game() -> void:

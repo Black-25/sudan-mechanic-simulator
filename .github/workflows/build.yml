@@ -61,7 +61,6 @@ jobs:
           if [ ! -x "$SDKM" ]; then
             SDKM="$(find $ANDROID_HOME/cmdline-tools -name sdkmanager -type f | head -n 1)"
           fi
-          echo "Using sdkmanager: $SDKM"
 
           set +o pipefail
           yes | "$SDKM" --licenses > /dev/null 2>&1 || true
@@ -74,20 +73,22 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ~/.config/godot ~/.android
-          printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/java_sdk_path = "%s"\nexport/android/android_sdk_path = "%s"\n' "$JAVA_HOME" "$ANDROID_HOME" > ~/.config/godot/editor_settings-4.3.tres
-
+          rm -f ~/.android/debug.keystore
           keytool -genkey -v -keystore ~/.android/debug.keystore \
             -storepass android -alias androiddebugkey -keypass android \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
 
+          printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/java_sdk_path = "%s"\nexport/android/android_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\nexport/android/force_system_user = false\nexport/android/shutdown_adb_on_exit = true\n' "$JAVA_HOME" "$ANDROID_HOME" "$HOME" > ~/.config/godot/editor_settings-4.tres
+          cat ~/.config/godot/editor_settings-4.tres
+
       - name: Export APK
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail
           mkdir -p build
           godot --headless --import || true
-          godot --headless --export-debug "Android" build/SudanMechanicSimulator.apk
+          godot --headless --verbose --export-debug "Android" build/SudanMechanicSimulator.apk 2>&1 | tee export.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

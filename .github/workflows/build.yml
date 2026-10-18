@@ -40,8 +40,7 @@ jobs:
             -O /tmp/godot-templates/templates.tpz
           unzip -oq /tmp/godot-templates/templates.tpz -d /tmp/godot-templates/unpacked
           cp -r /tmp/godot-templates/unpacked/templates/. "$TEMPLATE_DIR"/
-          test -s "$TEMPLATE_DIR/android_debug.apk"
-          test -s "$TEMPLATE_DIR/android_release.apk"
+          test -s "$TEMPLATE_DIR/android_source.zip"
           test -s "$TEMPLATE_DIR/version.txt"
 
       - name: Setup Java
@@ -84,22 +83,18 @@ jobs:
           SETTINGS=$(printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/java_sdk_path = "%s"\nexport/android/android_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\nexport/android/force_system_user = false\nexport/android/shutdown_adb_on_exit = true\n' "$JAVA_HOME" "$ANDROID_HOME" "$HOME")
           echo "$SETTINGS" > ~/.config/godot/editor_settings-4.3.tres
           echo "$SETTINGS" > ~/.config/godot/editor_settings-4.tres
-          cat ~/.config/godot/editor_settings-4.3.tres
 
-      - name: Debug info
+      - name: Install Android build template
         shell: bash
         run: |
-          echo "JAVA_HOME=$JAVA_HOME"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          ls "$ANDROID_HOME" || true
-          ls "$ANDROID_HOME/build-tools" || true
-          ls "$ANDROID_HOME/platforms" || true
-          ls "$ANDROID_HOME/cmake" || true
-          ls "$ANDROID_HOME/ndk" || true
-          ls "$ANDROID_HOME/cmdline-tools" || true
-          ls ~/.local/share/godot/export_templates/4.3.stable
-          ls -la
-          cat export_presets.cfg
+          set -euo pipefail
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/4.3.stable"
+          mkdir -p android/build
+          unzip -oq "$TEMPLATE_DIR/android_source.zip" -d android/build
+          echo "4.3.stable" > android/.build_version
+          touch android/build/.gdignore
+          chmod +x android/build/gradlew || true
+          ls -la android android/build
 
       - name: Export APK
         shell: bash

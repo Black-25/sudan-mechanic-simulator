@@ -32,15 +32,38 @@ jobs:
           version: 4.3.0
           use-dotnet: false
       
+      - name: Cache Export Templates
+        id: cache-templates
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/godot/export_templates
+          key: godot-templates-4.3-${{ runner.os }}
+      
       - name: Install Export Templates
+        if: steps.cache-templates.outputs.cache-hit != 'true'
         run: |
+          set -euo pipefail
           mkdir -p ~/.local/share/godot/export_templates/4.3.stable
           cd ~/.local/share/godot/export_templates/4.3.stable
-          wget --tries=3 --timeout=60 -q "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3.0-stable_export_templates.tpz" -O templates.tpz
+          
+          # تحميل مع إعادة المحاولة
+          wget --tries=3 --timeout=120 --progress=dot:giga \
+            "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz" \
+            -O templates.tpz
+          
+          # فك الضغط
           unzip -oq templates.tpz
           mv templates/* .
           rm -rf templates templates.tpz
+          
+          echo "✅ Templates installed:"
           ls -la
+      
+      - name: Verify Templates
+        run: |
+          ls -la ~/.local/share/godot/export_templates/4.3.stable/
+          test -f ~/.local/share/godot/export_templates/4.3.stable/android_debug.apk
+          test -f ~/.local/share/godot/export_templates/4.3.stable/android_release.apk
       
       - name: Build APK
         run: |
@@ -52,3 +75,5 @@ jobs:
         with:
           name: android-apk
           path: build/*.apk
+concurrency:
+  

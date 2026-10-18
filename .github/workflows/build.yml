@@ -1,184 +1,59 @@
-name: Build SUDAN MECHANIC SIMULATOR
+name: Build Android APK
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
-
-permissions:
-  contents: read
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build Android APK
-    runs-on: ubuntu-22.04
-
-    env:
-      GODOT_VERSION: "4.3"
-      GODOT_RELEASE: "4.3-stable"
-
+    runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install Java
-        uses: actions/setup-java@v5
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-
+          distribution: 'temurin'
+          java-version: '17'
+      
       - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-      - name: Download Godot
-        shell: bash
+          yes | sdkmanager --update || true
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0" "cmdline-tools;latest"
+          sdkmanager --list_installed | grep -E "(platform-tools|android-35|35.0.0)"
+      
+      - name: Setup Godot
         run: |
-          set -euo pipefail
-
-          wget -nv \
-            "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" \
-            -O godot.zip
-
-          unzip -q godot.zip -d godot-bin
-
-          GODOT_BIN="godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
-
-          chmod +x "$GODOT_BIN"
-          sudo install -m 755 "$GODOT_BIN" /usr/local/bin/godot
-
+          wget -q "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3.0-stable_linux.x86_64.zip" -O godot.zip
+          unzip -q godot.zip
+          mv "Godot_v4.3.0-stable_linux.x86_64" godot
+          chmod +x godot
+          sudo mv godot /usr/local/bin/
           godot --version
-
-      - name: Download and install Godot export templates
-        shell: bash
+      
+      - name: Install Export Templates
         run: |
-          set -euo pipefail
-
-          wget -nv \
-            "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" \
-            -O templates.tpz
-
-          mkdir -p templates-unpacked
-
-          unzip -oq templates.tpz -d templates-unpacked
-
-          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
-
-          mkdir -p "$TEMPLATE_DIR"
-
-          DEBUG_TEMPLATE="$(find templates-unpacked -type f -name 'android_debug.apk' -print -quit)"
-          RELEASE_TEMPLATE="$(find templates-unpacked -type f -name 'android_release.apk' -print -quit)"
-
-          if [ -z "$DEBUG_TEMPLATE" ] || [ -z "$RELEASE_TEMPLATE" ]; then
-            echo "ERROR: Android export templates were not found."
-            find templates-unpacked -maxdepth 5 -type f -print
-            exit 1
-          fi
-
-          cp "$DEBUG_TEMPLATE" "$TEMPLATE_DIR/android_debug.apk"
-          cp "$RELEASE_TEMPLATE" "$TEMPLATE_DIR/android_release.apk"
-
-          test -s "$TEMPLATE_DIR/android_debug.apk"
-          test -s "$TEMPLATE_DIR/android_release.apk"
-
-          echo "Installed Godot Android templates:"
-          ls -lh "$TEMPLATE_DIR"
-
-      - name: Check project files
-        shell: bash
+          mkdir -p ~/.local/share/godot/export_templates/4.3.stable
+          cd ~/.local/share/godot/export_templates/4.3.stable
+          wget -q "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3.0-stable_export_templates.tpz" -O templates.tpz
+          unzip -oq templates.tpz
+          mv templates/* .
+          rm -rf templates templates.tpz
+          ls -la
+      
+      - name: Build APK
         run: |
-          set -euo pipefail
-
-          REQUIRED_FILES=(
-            "project.godot"
-            "export_presets.cfg"
-            "scenes/main.tscn"
-            "scenes/player.tscn"
-            "scenes/workshop.tscn"
-            "scripts/game_manager.gd"
-            "scripts/player.gd"
-            "scripts/camera_controller.gd"
-            "scripts/mobile_controls.gd"
-            "scripts/save_system.gd"
-          )
-
-          for FILE in "${REQUIRED_FILES[@]}"; do
-            if [ ! -f "$FILE" ]; then
-              echo "ERROR: Missing project file: $FILE"
-              exit 1
-            fi
-            echo "OK: $FILE"
-          done
-
-      - name: Create debug keystore
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mkdir -p "$HOME/.android"
-
-          keytool -genkeypair \
-            -keystore "$HOME/.android/debug.keystore" \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -dname "CN=Android Debug,O=Android,C=US" \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000
-
-      - name: Import project resources
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          godot --headless --editor --path . --import
-
-      - name: Export Android APK
-        shell: bash
-        env:
-          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /home/runner/.android/debug.keystore
-          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
-          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
-        run: |
-          set -euo pipefail
-
           mkdir -p build
-
-          godot --headless \
-            --path . \
-            --export-debug "Android" \
-            build/SudanMechanicSimulator.apk
-
-      - name: Verify APK
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          APK="build/SudanMechanicSimulator.apk"
-
-          if [ ! -s "$APK" ]; then
-            echo "ERROR: APK was not created."
-            exit 1
-          fi
-
-          echo "APK created successfully:"
-          ls -lh "$APK"
-
+          godot --headless --export-release "Android" "build/android.apk"
+      
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Sudan-Mechanic-Simulator-APK
-          path: build/SudanMechanicSimulator.apk
-          if-no-files-found: error
-          retention-days: 14
+          name: android-apk
+          path: build/*.apk

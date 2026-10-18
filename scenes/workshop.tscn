@@ -1,0 +1,48 @@
+[gd_scene load_steps=5 format=3]
+
+[sub_resource type="StandardMaterial3D" id="FloorMaterial"]
+albedo_color = Color(0.32, 0.32, 0.30, 1)
+
+[sub_resource type="StandardMaterial3D" id="WallMaterial"]
+albedo_color = Color(0.55, 0.48, 0.38, 1)
+
+[sub_resource type="BoxMesh" id="FloorMesh"]
+size = Vector3(24, 0.3, 24)
+material = SubResource("FloorMaterial")
+
+[sub_resource type="BoxShape3D" id="FloorShape"]
+size = Vector3(24, 0.3, 24)
+
+[node name="Workshop" type="Node3D"]
+
+[node name="Floor" type="StaticBody3D" parent="."]
+
+[node name="FloorMesh" type="MeshInstance3D" parent="Floor"]
+position = Vector3(0, -0.15, 0)
+mesh = SubResource("FloorMesh")
+
+[node name="FloorCollision" type="CollisionShape3D" parent="Floor"]
+position = Vector3(0, -0.15, 0)
+shape = SubResource("FloorShape")
+
+[node name="BackWall" type="CSGBox3D" parent="."]
+position = Vector3(0, 2, -12)
+size = Vector3(24, 4, 0.4)
+material = SubResource("WallMaterial")
+
+[node name="LeftWall" type="CSGBox3D" parent="."]
+position = Vector3(-12, 2, 0)
+size = Vector3(0.4, 4, 24)
+material = SubResource("WallMaterial")
+
+[node name="RightWall" type="CSGBox3D" parent="."]
+position = Vector3(12, 2, 0)
+size = Vector3(0.4, 4, 24)
+material = SubResource("WallMaterial")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-45, -30, 0)
+light_energy = 1.2
+
+[node name="CameraPoint" type="Marker3D" parent="."]
+position = Vector3(0, 3, 8)

@@ -10,59 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-      
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          api-level: 34
-          build-tools: 34.0.0
-      
-      - name: Install Android SDK packages
+      - name: Setup Android SDK manually
         shell: bash
         run: |
           set -euo pipefail
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
           
-          # sdkmanager الآن متاح في PATH بفضل الخطوة السابقة
-          yes | sdkmanager --update || true
+          # تحميل command line tools
+          cd $HOME
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O cmdline-tools.zip
+          mkdir -p android-sdk/cmdline-tools
+          unzip -q cmdline-tools.zip -d android-sdk/cmdline-tools
+          mv android-sdk/cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
+          
+          # إضافة للـ PATH
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          
+          # تثبيت الحزم
           yes | sdkmanager --licenses > /dev/null || true
           sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-      
-      - name: Setup Godot
-        run: |
-          wget -q "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3.0-stable_linux.x86_64.zip" -O godot.zip
-          unzip -q godot.zip
-          mv "Godot_v4.3.0-stable_linux.x86_64" godot
-          chmod +x godot
-          sudo mv godot /usr/local/bin/
-          godot --version
-      
-      - name: Install Export Templates
-        run: |
-          mkdir -p ~/.local/share/godot/export_templates/4.3.stable
-          cd ~/.local/share/godot/export_templates/4.3.stable
-          wget -q "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3.0-stable_export_templates.tpz" -O templates.tpz
-          unzip -oq templates.tpz
-          mv templates/* .
-          rm -rf templates templates.tpz
-          ls -la
-      
-      - name: Build APK
-        run: |
-          mkdir -p build
-          godot --headless --export-release "Android" "build/android.apk"
-      
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-apk
-          path: build/*.apk

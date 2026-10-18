@@ -32,59 +32,101 @@ jobs:
         uses: android-actions/setup-android@v4
 
       - name: Install Android SDK packages
+        shell: bash
         run: |
+          set -euo pipefail
           yes | sdkmanager --licenses
-          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Download Godot
+        shell: bash
         run: |
-          set -eu
-          wget -nv "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -O godot.zip
+          set -euo pipefail
+
+          wget -nv \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" \
+            -O godot.zip
+
           unzip -q godot.zip -d godot-bin
-          chmod +x "godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
-          sudo install -m 755 "godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+
+          GODOT_BIN="godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+
+          chmod +x "$GODOT_BIN"
+          sudo install -m 755 "$GODOT_BIN" /usr/local/bin/godot
+
           godot --version
 
       - name: Download and install Godot export templates
         shell: bash
         run: |
-          set -eu
-          wget -nv "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -O templates.tpz
+          set -euo pipefail
+
+          wget -nv \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" \
+            -O templates.tpz
+
           mkdir -p templates-unpacked
+
           unzip -oq templates.tpz -d templates-unpacked
-          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/${GODOT_RELEASE}"
+
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+
           mkdir -p "$TEMPLATE_DIR"
-          find templates-unpacked -type f -name 'android*' -print
+
           DEBUG_TEMPLATE="$(find templates-unpacked -type f -name 'android_debug.apk' -print -quit)"
           RELEASE_TEMPLATE="$(find templates-unpacked -type f -name 'android_release.apk' -print -quit)"
+
           if [ -z "$DEBUG_TEMPLATE" ] || [ -z "$RELEASE_TEMPLATE" ]; then
-            echo "Android export templates not found."
+            echo "ERROR: Android export templates were not found."
             find templates-unpacked -maxdepth 5 -type f -print
             exit 1
           fi
+
           cp "$DEBUG_TEMPLATE" "$TEMPLATE_DIR/android_debug.apk"
           cp "$RELEASE_TEMPLATE" "$TEMPLATE_DIR/android_release.apk"
+
           test -s "$TEMPLATE_DIR/android_debug.apk"
           test -s "$TEMPLATE_DIR/android_release.apk"
+
+          echo "Installed Godot Android templates:"
           ls -lh "$TEMPLATE_DIR"
 
       - name: Check project files
+        shell: bash
         run: |
-          set -eu
-          test -f project.godot
-          test -f export_presets.cfg
-          test -f scenes/main.tscn
-          test -f scenes/player.tscn
-          test -f scenes/workshop.tscn
-          test -f scripts/game_manager.gd
-          test -f scripts/player.gd
-          test -f scripts/camera_controller.gd
-          test -f scripts/mobile_controls.gd
-          test -f scripts/save_system.gd
+          set -euo pipefail
+
+          REQUIRED_FILES=(
+            "project.godot"
+            "export_presets.cfg"
+            "scenes/main.tscn"
+            "scenes/player.tscn"
+            "scenes/workshop.tscn"
+            "scripts/game_manager.gd"
+            "scripts/player.gd"
+            "scripts/camera_controller.gd"
+            "scripts/mobile_controls.gd"
+            "scripts/save_system.gd"
+          )
+
+          for FILE in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$FILE" ]; then
+              echo "ERROR: Missing project file: $FILE"
+              exit 1
+            fi
+            echo "OK: $FILE"
+          done
 
       - name: Create debug keystore
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p "$HOME/.android"
+
           keytool -genkeypair \
             -keystore "$HOME/.android/debug.keystore" \
             -storepass android \
@@ -96,24 +138,42 @@ jobs:
             -validity 10000
 
       - name: Import project resources
+        shell: bash
         run: |
+          set -euo pipefail
+
           godot --headless --editor --path . --import
 
       - name: Export Android APK
+        shell: bash
         env:
           GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /home/runner/.android/debug.keystore
           GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
           GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
-          set -eu
+          set -euo pipefail
+
           mkdir -p build
-          godot --headless --path . --export-debug "Android" build/SudanMechanicSimulator.apk
+
+          godot --headless \
+            --path . \
+            --export-debug "Android" \
+            build/SudanMechanicSimulator.apk
 
       - name: Verify APK
+        shell: bash
         run: |
-          set -eu
-          test -s build/SudanMechanicSimulator.apk
-          ls -lh build/SudanMechanicSimulator.apk
+          set -euo pipefail
+
+          APK="build/SudanMechanicSimulator.apk"
+
+          if [ ! -s "$APK" ]; then
+            echo "ERROR: APK was not created."
+            exit 1
+          fi
+
+          echo "APK created successfully:"
+          ls -lh "$APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

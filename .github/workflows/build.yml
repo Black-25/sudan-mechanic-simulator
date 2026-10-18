@@ -1,79 +1,65 @@
-name: Build Android APK
+name: Build Android
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-      
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: 10406996
-          accept-android-sdk-licenses: true
-          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
-      
-      - name: Setup Godot Engine
-        uses: chickensoft-games/setup-godot@v2
-        with:
-          version: 4.3.0
-          use-dotnet: false
-      
+
       - name: Cache Export Templates
         id: cache-templates
         uses: actions/cache@v4
         with:
           path: ~/.local/share/godot/export_templates
-          key: godot-templates-4.3-${{ runner.os }}
-      
-      - name: Install Export Templates
-        if: steps.cache-templates.outputs.cache-hit != 'true'
+          key: godot-templates-4.3
+
+      - name: Install Godot
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p ~/.local/share/godot/export_templates/4.3.stable
-          cd ~/.local/share/godot/export_templates/4.3.stable
-          
-          # تحميل مع إعادة المحاولة
-          wget --tries=3 --timeout=120 --progress=dot:giga \
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip -O /tmp/godot.zip
+          unzip -oq /tmp/godot.zip -d /tmp/godot
+          sudo mv /tmp/godot/Godot_v4.3-stable_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+
+      - name: Install Export Templates
+        if: steps.cache-templates.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/4.3.stable"
+          mkdir -p "$TEMPLATE_DIR"
+          mkdir -p /tmp/godot-templates/unpacked
+
+          wget --tries=3 --timeout=120 \
             "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz" \
-            -O templates.tpz
-          
-          # فك الضغط
-          unzip -oq templates.tpz
-          mv templates/* .
-          rm -rf templates templates.tpz
-          
-          echo "✅ Templates installed:"
-          ls -la
-      
-      - name: Verify Templates
-        run: |
-          ls -la ~/.local/share/godot/export_templates/4.3.stable/
-          test -f ~/.local/share/godot/export_templates/4.3.stable/android_debug.apk
-          test -f ~/.local/share/godot/export_templates/4.3.stable/android_release.apk
-      
-      - name: Build APK
-        run: |
-          mkdir -p build
-          godot --headless --export-release "Android" "build/android.apk"
-      
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-apk
-          path: build/*.apk
-concurrency:
-  
+            -O /tmp/godot-templates/templates.tpz
+
+          unzip -oq /tmp/godot-templates/templates.tpz \
+            -d /tmp/godot-templates/unpacked
+
+          SRC_DIR="/tmp/godot-templates/unpacked/templates"
+          if [ ! -d "$SRC_DIR" ]; then
+            echo "ERROR: templates folder not found."
+            find /tmp/godot-templates/unpacked -maxdepth 2 -print
+            exit 1
+          fi
+
+          cp -r "$SRC_DIR"/. "$TEMPLATE_DIR"/
+
+          for f in android_debug.apk android_release.apk version.txt; do
+            if [ ! -s "$TEMPLATE_DIR/$f" ]; then
+              echo "ERROR: missing $f"
+              ls -lh "$TEMPLATE_DIR"
+              exit 1
+            fi
+          done
+
+          echo "Templates installed."
